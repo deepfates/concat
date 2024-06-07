@@ -1,36 +1,31 @@
+import json
 from typing import List
 import logging
-
+import numpy as np
 import replicate
 
 from bookwyrm.models import TextChunk
-
 from .prompts import SYSTEM_PROMPT, QUERY_PROMPT
 
 # Configure logging
-logging.basicConfig(level=logging.INFO) 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def embedding_api(texts):
+    resp =  replicate.run(
+        "replicate/all-mpnet-base-v2:b6b7585c9640cd7a9572c6e129c9549d79c9c31f0d3fdce7baac7c67ca38f305",
+        input={"text_batch": json.dumps(texts)},
+    )
+    flattened_embeds = [o['embedding'] for o in resp]
+    return np.array(flattened_embeds)
+
+
 def generate_prompt(query: str, search_results: List[str]) -> str:
-    """
-    Generate a prompt for the model based on the query.
-
-    Args:
-        query (str): The original text query.
-
-    Returns:
-        str: The generated prompt.
-    """
     logger.info("Generating prompt")
     formatted_search_results = "\n\n---\n\n".join(search_results)
-    prompt = f"{QUERY_PROMPT}\n\nSearch results:\n```{formatted_search_results}```\n\nQuery: {query}"
-    return prompt
+    return f"{QUERY_PROMPT}\n\nSearch results:\n```{formatted_search_results}```\n\nQuery: {query}"
 
 def generate_text(prompt: str):
-    """
-    Generate text based on the prompt using the meta/meta-llama-3-8b-instruct model.
-    The meta/meta-llama-3-8b-instruct model can stream output as it's running.
-    """
     for event in replicate.stream(
         "meta/meta-llama-3-8b-instruct",
         input={
@@ -38,7 +33,6 @@ def generate_text(prompt: str):
             "top_p": 0.9,
             "prompt": prompt,
             "max_tokens": 512,
-            "min_tokens": 0,
             "temperature": 0.6,
             "system_prompt": SYSTEM_PROMPT,
             "length_penalty": 1,
@@ -49,19 +43,3 @@ def generate_text(prompt: str):
         },
     ):
         yield str(event)
-
-def generate_answer(similar_chunks: List[TextChunk], query: str):
-    """
-    Generate an answer based on the similar documents.
-
-    Args:
-        similar_chunks (List[TextChunk]): A list of similar text chunks.
-        query (str): The original text query.
-
-    Returns:
-        generator: A generator yielding the generated answer text.
-    """
-    logger.info("Generating answer")
-    prompt = generate_prompt(query, [chunk.text for chunk in similar_chunks])
-    return generate_text(prompt)
-            

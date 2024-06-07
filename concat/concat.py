@@ -1,16 +1,14 @@
 import json
 import logging
-from typing import List, Dict, Any
+from typing import List
 from collections import Counter
 
 import numpy as np
-import asyncio
 
-from bookwyrm.models import Bookwyrm, DocumentRecord, TextChunk
-from bookwyrm.utils import embedding_api
+from bookwyrm.models import Bookwyrm, TextChunk
 
 from .search import nearest_neighbors
-from .chat import generate_answer
+from .chat import generate_prompt, generate_text, embedding_api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,9 +22,9 @@ def load_model(location: str = "./wyrm.json") -> Bookwyrm:
     logger.info("Model loaded successfully")
     return wyrm
 
-async def process_query(query: str) -> np.ndarray:
+def process_query(query: str) -> np.ndarray:
     logger.info("Processing query: %s", query)
-    embed = await embedding_api(query)
+    embed = embedding_api(query)
     logger.info("Query processed")
     return embed
 
@@ -35,46 +33,39 @@ def get_similar_chunks(model: Bookwyrm, query_embedding: np.ndarray) -> List[Tex
     embeddings = model.embeddings
     indices = nearest_neighbors(query_embedding, embeddings)
     similar_chunks = [model.chunks[i] for i in indices]
-    logger.info("Found similar chunks, indices: %s", indices)
-    logger.info("Found similar chunks, chunks: %s", similar_chunks)
+    logger.info("Found similar chunks")
     return similar_chunks
 
 def get_citations(model: Bookwyrm, similar_chunks: List[TextChunk]) -> str:
     logger.info("Generating citations")
-    citations: Counter[str] = Counter()
-    for chunk in similar_chunks:
-        doc = model.documents[chunk.document_index]
-        citations[doc.uri] += 1
-    sorted_citations = [f"{uri} ({count})" for uri, count in citations.most_common()]
-    citations_str = "\n".join(sorted_citations)
-    return f"Related files:\n{citations_str}"
+    citations = Counter(chunk.document_index for chunk in similar_chunks)
+    sorted_citations = [f"{model.documents[idx].uri} ({count})" for idx, count in citations.most_common()]
+    return f"Related files: {', '.join(sorted_citations)}"
 
-async def async_generate_answer(similar_chunks: List[TextChunk], query: str):
-    loop = asyncio.get_event_loop()
-    for answer_part in await loop.run_in_executor(None, generate_answer, similar_chunks, query):
-        yield answer_part
+def generate_answer(similar_chunks: List[TextChunk], query: str):
+    logger.info("Generating answer")
+    prompt = generate_prompt(query, [chunk.text for chunk in similar_chunks])
+    for text in generate_text(prompt):
+        yield text
 
-async def get_answer(model: Bookwyrm, query: str):
+def get_full_answer(model: Bookwyrm, query: str):
     logger.info("Starting main process")
-    query_embedding = await process_query(query)
+    query_embedding = process_query(query)
     similar_chunks = get_similar_chunks(model, query_embedding)
     citations = get_citations(model, similar_chunks)
 
-    async for answer_part in async_generate_answer(similar_chunks, query):
+    for answer_part in generate_answer(similar_chunks, query):
         yield answer_part
 
     yield citations
-
-async def main(model: Bookwyrm, query: str):
-    async for part in get_answer(model, query):
-        yield part
+    
+def main():
+    model = load_model()
+    query = "Can I use Replicate models from this library?"
+    parts = []
+    for part in get_full_answer(model, query):
+        parts.append(part)
+        print(part)
 
 if __name__ == "__main__":
-    test_model = load_model()
-    TEST_QUERY = "Can I use Replicate models from this library?"
-
-    async def main_wrapper():
-        async for part in main(test_model, TEST_QUERY):
-            print(part)
-
-    asyncio.run(main_wrapper())
+   main()
