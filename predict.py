@@ -21,7 +21,7 @@ class Predictor(BasePredictor):
             query: str = 
             Input(
                 description="The query", 
-                default="What documentation have you read?"
+                default="Is it possible to use Replicate with this library?"
                 )
             ) -> ConcatenateIterator[str]:
         """Predict the answer to a query using the loaded model."""

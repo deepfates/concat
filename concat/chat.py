@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import replicate
 
-from bookwyrm.models import TextChunk
 from .prompts import SYSTEM_PROMPT, QUERY_PROMPT
 
 # Configure logging
@@ -13,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def embedding_api(texts):
     resp =  replicate.run(
+        # This has to be the same as the one in bookwyrm :\
         "replicate/all-mpnet-base-v2:b6b7585c9640cd7a9572c6e129c9549d79c9c31f0d3fdce7baac7c67ca38f305",
         input={"text_batch": json.dumps(texts)},
     )

@@ -2,10 +2,13 @@ import json
 import logging
 from typing import List
 from collections import Counter
+from dotenv import load_dotenv
 
 import numpy as np
 
-from bookwyrm.models import Bookwyrm, TextChunk
+load_dotenv()
+
+from .models import Bookwyrm, TextChunk
 
 from .search import nearest_neighbors
 from .chat import generate_prompt, generate_text, embedding_api
