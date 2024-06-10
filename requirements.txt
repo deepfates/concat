@@ -7,7 +7,6 @@ httpx==0.27.0
 idna==3.7
 numpy==1.26.4
 packaging==24.1
-pip3-autoremove==1.2.2
 pydantic==2.7.3
 pydantic_core==2.18.4
 python-dotenv==1.0.1
